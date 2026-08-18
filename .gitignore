@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Raw data -- 1.3 GB, never commit it
+data/raw/*
+!data/raw/.gitkeep
+
+# Trained model artifacts
+models/*
+!models/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store

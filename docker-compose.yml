@@ -1,0 +1,30 @@
+# Single Postgres service so all three teammates develop against an identical DB.
+# Start it with:  docker compose up -d
+# Stop it with:   docker compose down        (add -v to also wipe the data volume)
+services:
+  postgres:
+    image: postgres:16
+    container_name: burnout_postgres
+    restart: unless-stopped
+    environment:
+      # These come from the .env file sitting next to this compose file.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      # host_port:container_port -- connect from your laptop on POSTGRES_PORT.
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      # Named volume = the data survives `docker compose down` (but not `down -v`).
+      - burnout_pgdata:/var/lib/postgresql/data
+      # Anything in this folder is run automatically the FIRST time the DB is created.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      # Lets `docker compose up -d --wait` block until Postgres actually accepts queries.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  burnout_pgdata:
