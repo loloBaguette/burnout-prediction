@@ -17,6 +17,7 @@ shap==0.46.0
 # Dashboard
 streamlit==1.40.2
 altair==5.5.0
+matplotlib==3.9.3        # EDA plots and SHAP charts
 
 # Notebook (for notebooks/01_eda.ipynb)
 jupyter==1.1.1
