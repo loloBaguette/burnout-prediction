@@ -1,180 +1,486 @@
 # Employee Burnout Prediction
 
-An end-to-end pipeline that loads an HR dataset into Postgres, cleans it, trains a
-burnout-risk classifier, explains every prediction with SHAP, and serves the results in a
-Streamlit dashboard.
+This project reads a big file of employee data, cleans it up, trains a machine-learning model
+to spot people at risk of burnout, explains *why* it flagged each person, and shows all of it
+in a web dashboard you open in your browser.
 
-One command runs the whole thing:
-
-```bash
-python etl/run_pipeline.py
-```
+**New to all this? Start at [Part 1](#part-1--install-the-four-tools-you-need) and work down.
+Every step tells you what you should see when it worked.** You do not need to understand the
+code to get it running.
 
 ---
 
-## Quick start
+## Contents
 
-You need **Docker Desktop** (running) and **Python 3.11 or 3.12**.
+- [What you will end up with](#what-you-will-end-up-with)
+- [Part 1 — Install the four tools you need](#part-1--install-the-four-tools-you-need)
+- [Part 2 — Get the project onto your computer](#part-2--get-the-project-onto-your-computer)
+- [Part 3 — Set it up (once)](#part-3--set-it-up-once)
+- [Part 4 — Run it](#part-4--run-it)
+- [Part 5 — Using it day to day](#part-5--using-it-day-to-day)
+- [When something goes wrong](#when-something-goes-wrong)
+- [What the project actually does](#what-the-project-actually-does)
+- [What we found in the data](#what-we-found-in-the-data-important-for-the-report)
+- [How the modelling works](#how-the-modelling-works)
+- [Notes for the team](#notes-for-the-team)
 
-> **Use 3.11 or 3.12, not 3.13.** `shap` 0.46 ships no pre-built wheel for 3.13, so pip would
-> try to compile it from source and fail unless you have a full C++ toolchain installed. Every
-> other dependency is fine on 3.13 — shap is the one that pins us.
+---
 
-Pick your platform below; everything after setup is identical.
+## What you will end up with
 
-<details open>
-<summary><b>Windows</b> (PowerShell)</summary>
+A dashboard in your browser showing all 850,000 employees, where you can:
 
-Install the two prerequisites first if you do not have them:
+- filter by department, role, tenure or risk level
+- see each person's **risk score** (a number between 0 and 1) and **risk tier** (low / medium / high)
+- see the **top 3 reasons** the model gave that person their score, written in plain English
+- see which departments have the most at-risk people
 
-- [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/) — needs the
-  **WSL 2** backend, which its installer offers to set up for you. Launch it and wait for the
-  whale icon to stop animating before running anything below.
-- [Python 3.11 or 3.12](https://www.python.org/downloads/windows/) — **tick "Add python.exe to
-  PATH"** in the installer, or nothing below will be found. Do not use 3.13 (see the note
-  above).
+Getting there takes about **20 minutes of installing**, then **6 minutes of the computer doing
+the work**. After that, starting it up again takes seconds.
 
-Then, from the repo folder:
+---
 
+## Part 1 — Install the four tools you need
+
+You need four things. Install them in this order. If you already have one, skip it.
+
+### 1.1 A terminal (you already have one)
+
+A terminal is a window where you type commands instead of clicking buttons. Every instruction
+in this README is typed into a terminal.
+
+- **Windows:** press the Start key, type `powershell`, and open **Windows PowerShell**.
+- **Mac:** press `Cmd + Space`, type `terminal`, and press Enter.
+
+Leave it open — you will use it for everything below.
+
+### 1.2 Git — downloads the project code
+
+Git is the tool that copies the project from GitHub onto your computer.
+
+- **Windows:** download from [git-scm.com/download/win](https://git-scm.com/download/win) and
+  run the installer. Click **Next** through every screen — the defaults are correct.
+- **Mac:** you probably have it. If not, typing `git` in the terminal will offer to install it.
+
+**Check it worked** — type this and press Enter:
+
+```
+git --version
+```
+
+✅ You should see something like `git version 2.43.0`. The exact number does not matter.
+❌ If you see "not recognized" or "command not found", the install did not finish — close the
+terminal, open a new one, and try again. (A new terminal is needed for it to notice new
+software.)
+
+### 1.3 Python 3.12 — the language the project is written in
+
+⚠️ **Install Python 3.12, not the newest version.** The newest (3.13) is missing a piece one of
+our libraries needs, and the install will fail with a confusing error about "Microsoft Visual
+C++". Save yourself the trouble.
+
+- **Windows:** download **Python 3.12** from
+  [python.org/downloads/windows](https://www.python.org/downloads/windows/). Scroll to a 3.12
+  release and get the **Windows installer (64-bit)**.
+  🚨 **On the first screen of the installer, tick the box that says "Add python.exe to PATH"
+  before clicking Install.** It is easy to miss and nothing will work without it.
+- **Mac:** download **Python 3.12** from
+  [python.org/downloads/macos](https://www.python.org/downloads/macos/) and run the installer.
+
+**Check it worked:**
+
+```
+py --version
+```
+
+(On Mac, use `python3 --version` instead.)
+
+✅ You should see `Python 3.12.something`.
+❌ "not recognized"? You missed the "Add python.exe to PATH" tick box. Re-run the installer,
+choose **Modify**, and tick it.
+
+### 1.4 Docker Desktop — runs the database
+
+Our project stores its data in a database called PostgreSQL. Rather than each of us installing
+and configuring that separately (painful, and we would all end up with slightly different
+setups), Docker runs it in a pre-packaged box. You never have to configure the database — you
+just start the box.
+
+- Download from
+  [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/).
+- **Windows:** the installer will ask about **WSL 2**. Say yes to everything it offers. It will
+  probably ask you to restart your computer — do it.
+- **Mac:** drag it to Applications like any other app.
+
+**After installing, open Docker Desktop and leave it running.** You will see a whale icon in
+your taskbar (Windows) or menu bar (Mac). Wait until it stops animating — that means the engine
+has started. This takes a minute or two the first time.
+
+🚨 **Docker Desktop must be open and running every time you work on this project.** If you
+restart your computer, open it again. This is the single most common thing that breaks.
+
+**Check it worked:**
+
+```
+docker --version
+```
+
+✅ You should see `Docker version 29.x.x` or similar.
+
+---
+
+## Part 2 — Get the project onto your computer
+
+### 2.1 Choose where it should live
+
+Pick a folder. Your Documents folder is fine. In the terminal, go there:
+
+**Windows:**
 ```powershell
+cd $HOME\Documents
+```
+
+**Mac:**
+```bash
+cd ~/Documents
+```
+
+> **What `cd` means:** "change directory" — it moves your terminal into a folder, like
+> double-clicking a folder in Explorer or Finder. Your terminal is always "inside" one folder,
+> and commands run relative to wherever you are. Getting this wrong is the #1 cause of
+> "file not found" errors.
+
+### 2.2 Download the project
+
+⚠️ **First: you need access.** This repository is private, so you must be added as a
+collaborator before you can download it. If you have not been added, ask the repo owner to go
+to **GitHub → the repo → Settings → Collaborators → Add people** and add your GitHub username.
+
+Then:
+
+```
+git clone https://github.com/loloBaguette/burnout-prediction.git
+```
+
+The first time, Git will ask you to sign in to GitHub — a browser window opens, you log in, and
+it remembers you afterwards.
+
+This creates a new folder called `burnout-prediction` containing all the code.
+
+❌ **`repository not found`** almost never means the address is wrong. On a private repo GitHub
+says that when you *do not have access* — so it means either you have not been added as a
+collaborator, or you are signed in to Git as a different GitHub account.
+
+### 2.3 Go into the project folder
+
+```
+cd burnout-prediction
+```
+
+✅ **Everything from here on must be typed while you are inside this folder.** If you close the
+terminal and come back later, you must `cd` back here first.
+
+To check where you are:
+
+```
+pwd
+```
+
+✅ It should end in `burnout-prediction`.
+
+### 2.4 Get the dataset
+
+The data file is **1.3 GB** — far too big for GitHub, so it is deliberately not in the repo.
+Get it from a teammate (OneDrive, Google Drive, a USB stick — whatever is easiest).
+
+Put the file here, inside the project folder:
+
+```
+burnout-prediction\data\raw\synthetic-employee-dataset.json
+```
+
+⚠️ **The file name must match exactly.** If yours is called something else, either rename it,
+or open the `.env` file you will create in the next part and change the `RAW_DATA_PATH` line to
+match your file's name.
+
+---
+
+## Part 3 — Set it up (once)
+
+Four commands. Run them one at a time, in order, and wait for each to finish before starting
+the next.
+
+### 3.1 Start the database
+
+```
 docker compose up -d --wait
-py -3.11 -m venv .venv
+```
+
+The very first time, this downloads PostgreSQL (a few hundred MB), so give it a couple of
+minutes. Later runs take about five seconds.
+
+✅ You should see lines ending with `Container burnout_postgres Healthy`.
+❌ An error mentioning "daemon" or "pipe" means Docker Desktop is not running. Open it, wait
+for the whale to settle, and try again.
+
+### 3.2 Create a virtual environment
+
+**Windows:**
+```powershell
+py -3.12 -m venv .venv
+```
+
+**Mac:**
+```bash
+python3.12 -m venv .venv
+```
+
+> **What this does:** it creates a private copy of Python inside the project, in a hidden folder
+> called `.venv`. Libraries we install go in there instead of being dumped system-wide, so this
+> project cannot break your other Python work and vice versa. It is standard practice — every
+> Python project does this.
+
+✅ Nothing is printed if it worked. A new `.venv` folder appears.
+
+### 3.3 Install the libraries
+
+**Windows:**
+```powershell
 .venv\Scripts\pip install -r requirements.txt
+```
+
+**Mac:**
+```bash
+.venv/bin/pip install -r requirements.txt
+```
+
+This downloads about 15 libraries and takes 2–5 minutes. Lots of text scrolls past — that is
+normal.
+
+✅ Ends with `Successfully installed ...` and a long list.
+❌ An error about **"Microsoft Visual C++ 14.0"** means you are on Python 3.13. Delete the
+`.venv` folder and redo step 3.2 with `py -3.12`.
+
+> **Notice the difference:** Windows uses `.venv\Scripts\`, Mac uses `.venv/bin/`. That prefix
+> is how you tell the computer to use the project's private Python instead of the system one.
+> It appears in every command from here on.
+
+### 3.4 Create your settings file
+
+**Windows:**
+```powershell
 Copy-Item .env.example .env
 ```
 
-Put the dataset at `data\raw\synthetic-employee-dataset.json`, then:
-
-```powershell
-.venv\Scripts\python etl\run_pipeline.py
-.venv\Scripts\streamlit run dashboard\app.py
-```
-
-Two things that trip people up on Windows:
-
-- **`py -3.11` not `python3.11`.** The `py` launcher is what the Python installer puts on PATH.
-  If `py -3.11` reports no such version, run `py -0` to list what you actually have.
-  `py -3.12` works equally well; `py -3.13` does not (see the note above).
-- **`.venv\Scripts\` not `.venv/bin/`.** This is the one difference that shows up in every
-  command. If you would rather not type it each time, activate the environment once per
-  terminal and drop the prefix entirely:
-
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  python etl\run_pipeline.py
-  ```
-
-  If PowerShell refuses with an execution-policy error, this allows local scripts for your
-  user only:
-
-  ```powershell
-  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-  ```
-
-</details>
-
-<details open>
-<summary><b>macOS / Linux</b></summary>
-
+**Mac:**
 ```bash
-docker compose up -d --wait
-python3.11 -m venv .venv
-.venv/bin/pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Put the dataset at `data/raw/synthetic-employee-dataset.json`, then:
+> **What this does:** `.env` holds the database password and the path to the data file. It is
+> deliberately not shared on GitHub (passwords never belong in a repo), so each of us makes our
+> own from the example. The defaults work as-is — you do not need to edit it.
 
+---
+
+## Part 4 — Run it
+
+### 4.1 Build everything
+
+**Windows:**
+```powershell
+.venv\Scripts\python etl\run_pipeline.py
+```
+
+**Mac:**
 ```bash
 .venv/bin/python etl/run_pipeline.py
+```
+
+**This takes about 6 minutes.** It prints a banner for each of its seven stages so you can see
+where it is. Leave it alone until it finishes.
+
+✅ It ends with `PIPELINE COMPLETE`, a timing table, and a count of rows in each database table.
+
+What it is doing, in order: creating the database tables → reading the 1.3 GB file into the
+database → cleaning the data → training three different models and picking the best → training
+a backup model → scoring all 850,000 employees → working out the top 3 reasons for each one.
+
+### 4.2 Open the dashboard
+
+**Windows:**
+```powershell
+.venv\Scripts\streamlit run dashboard\app.py
+```
+
+**Mac:**
+```bash
 .venv/bin/streamlit run dashboard/app.py
 ```
 
-</details>
+✅ Your browser opens automatically at <http://localhost:8501>. If it does not, open that
+address yourself.
 
-The pipeline takes about **six minutes** end to end. The dashboard then opens at
-<http://localhost:8501>.
+**To stop the dashboard:** click the terminal window and press `Ctrl + C`.
 
-To check everything landed correctly (`.venv\Scripts\pytest` on Windows):
+### 4.3 Check everything is correct (optional)
 
+**Windows:**
+```powershell
+.venv\Scripts\pytest tests\ -v
+```
+
+**Mac:**
 ```bash
 .venv/bin/pytest tests/ -v
 ```
 
-### If something goes wrong
-
-| Symptom | Cause and fix |
-|---|---|
-| `no such file or directory: .venv/bin/...` | You are not in the repo folder, or you are on Windows and need `.venv\Scripts\`. |
-| `connection refused` / `could not connect to server` | Postgres is not up. Run `docker compose up -d --wait` and wait for it to report healthy. |
-| `docker: unknown command: docker compose` | Docker Desktop is installed but not running. Start it and wait for the whale icon to settle. |
-| Dashboard loads but says "No trained model found" | The pipeline has not been run yet. Run `etl/run_pipeline.py`. |
-| `port 5432 already in use` | You have another Postgres running. Change `POSTGRES_PORT` in `.env` to e.g. `5433` and re-run `docker compose up -d --wait`. |
-| Pipeline fails at the `load` stage | The dataset is not where `RAW_DATA_PATH` in `.env` points. That path is relative to the repo root. |
-| `pip install` fails building `shap`, or asks for "Microsoft Visual C++ 14.0" | You are on Python 3.13. Delete `.venv`, recreate it with `py -3.12 -m venv .venv`, and install again. |
-| `'.venv\Scripts\Activate.ps1' cannot be loaded because running scripts is disabled` | PowerShell execution policy — see the `Set-ExecutionPolicy` command above. |
-
-Stopping things: `Ctrl-C` stops the dashboard, `docker compose down` stops the database and
-keeps the data, `docker compose down -v` throws the data away too.
+✅ `18 passed`. These check the data has no gaps, the model meets the required accuracy, and
+every employee has a score and exactly three explanations.
 
 ---
 
-## What each piece does
+## Part 5 — Using it day to day
+
+Once set up, you do **not** repeat Parts 1–3. Coming back to the project later:
+
+1. Open **Docker Desktop** and wait for the whale to settle.
+2. Open a terminal and go to the project folder:
+   ```
+   cd $HOME\Documents\burnout-prediction
+   ```
+   (Mac: `cd ~/Documents/burnout-prediction`)
+3. Start the database:
+   ```
+   docker compose up -d --wait
+   ```
+4. Open the dashboard:
+   ```
+   .venv\Scripts\streamlit run dashboard\app.py
+   ```
+
+Your data is still in the database — you do **not** need to re-run the 6-minute pipeline unless
+you changed the code or the data.
+
+**Getting the latest changes from teammates:**
+```
+git pull
+```
+
+**Shutting down:** `Ctrl + C` stops the dashboard. `docker compose down` stops the database and
+keeps your data. `docker compose down -v` deletes the data too (you would need to re-run the
+pipeline).
+
+**Re-running only part of the pipeline** while developing — this skips the slow steps:
+```
+.venv\Scripts\python etl\run_pipeline.py --skip-load --skip-train
+```
+
+---
+
+## When something goes wrong
+
+| What you see | What it means | Fix |
+|---|---|---|
+| `no such file or directory: .venv/bin/...` or `.venv\Scripts\...` | You are not in the project folder | `cd` into `burnout-prediction`, then check with `pwd` |
+| `connection refused`, `could not connect to server` | The database is not running | Open Docker Desktop, then `docker compose up -d --wait` |
+| `docker: unknown command` or errors about "daemon"/"pipe" | Docker Desktop is not running | Open it, wait for the whale to stop animating |
+| `Microsoft Visual C++ 14.0 is required` | You are on Python 3.13 | Delete `.venv`, redo step 3.2 with `py -3.12` |
+| `py` or `python` "not recognized" | Python is not on your PATH | Re-run the Python installer, choose **Modify**, tick "Add python.exe to PATH", open a **new** terminal |
+| `Activate.ps1 cannot be loaded because running scripts is disabled` | PowerShell security setting | Run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` |
+| Dashboard says **"No trained model found"** | The pipeline has not been run | Do step 4.1 |
+| Pipeline fails at the **load** stage | The data file is missing or misnamed | Check `data\raw\` and re-read step 2.4 |
+| `port 5432 already in use` | Something else uses that port | Open `.env`, change `POSTGRES_PORT` to `5433`, re-run `docker compose up -d --wait` |
+| A command "does nothing" | It is still working | Big steps take minutes. Wait for the prompt to come back |
+
+**Still stuck?** Copy the *whole* error message — the last 20 lines, not just the final one —
+and send it to the team. The useful part is usually in the middle.
+
+---
+
+## What the project actually does
+
+### The files
 
 | File | What it does |
 |---|---|
-| `docker-compose.yml` | One Postgres 16 service, so all three of us develop against an identical DB |
-| `db/schema.sql` | The three model tables. The two data tables are created from the real file, not from guessed column names |
-| `db.py` | Shared connection helper — one place that knows how to reach Postgres |
-| `etl/load_raw.py` | Streams the 1.3 GB JSON into `raw_employee_data`, as-is |
-| `etl/clean.py` | `raw` → `stg_employee_clean`, with 0 NULLs enforced by database constraints |
-| `notebooks/01_eda.ipynb` | Profiles all 32 columns. **Read this before changing anything downstream** |
-| `ml/features.py` | Encoding, the leakage exclusion list, and the stratified 80/20 split |
-| `ml/train.py` | Trains and compares 3 algorithms, calibrates the winner |
-| `ml/evaluate.py` | Confusion matrix, recall/precision/F1, and the trivial baseline |
-| `ml/fallback_model.py` | A second model on 6 "any HR system has this" columns |
-| `ml/explain.py` | SHAP `TreeExplainer` → top-3 factors per employee |
-| `ml/predict.py` | Calibrated risk score + low/medium/high tier for all 850k employees |
-| `etl/run_pipeline.py` | Chains all of the above |
-| `dashboard/app.py` | Streamlit dashboard reading straight from Postgres |
-| `tests/test_pipeline.py` | Smoke tests against the acceptance checklist |
+| `docker-compose.yml` | Describes the database box so we all get an identical one |
+| `db/schema.sql` | The database tables |
+| `db.py` | Shared code for connecting to the database |
+| `etl/load_raw.py` | Reads the 1.3 GB file into the database, unchanged |
+| `etl/clean.py` | Fixes the messy bits and makes a clean copy |
+| `notebooks/01_eda.ipynb` | **The analysis notebook — read this one** |
+| `ml/features.py` | Turns the data into numbers the model can use |
+| `ml/train.py` | Trains three models and picks the best |
+| `ml/evaluate.py` | Measures how good each model is |
+| `ml/fallback_model.py` | A simpler backup model |
+| `ml/explain.py` | Works out the top 3 reasons per employee |
+| `ml/predict.py` | Gives everyone a score and a risk tier |
+| `etl/run_pipeline.py` | Runs all of the above in order |
+| `dashboard/app.py` | The web dashboard |
+| `tests/test_pipeline.py` | Checks it all worked |
 
-Handy flags while developing:
+### Opening the analysis notebook
 
-```bash
-.venv/bin/python etl/run_pipeline.py --skip-load --skip-train
+The notebook shows every chart and finding. To open it:
+
+```
+.venv\Scripts\jupyter notebook notebooks\01_eda.ipynb
 ```
 
-(On Windows: `.venv\Scripts\python etl\run_pipeline.py --skip-load --skip-train`.)
+You can also just read it on GitHub — the charts and results are saved inside the file, so it
+displays without running anything.
+
+### The database tables
+
+| Table | Rows | What is in it |
+|---|---|---|
+| `raw_employee_data` | 849,999 | The original file, untouched |
+| `stg_employee_clean` | 849,999 | The cleaned version, no gaps |
+| `model_metadata` | 4 | How well each model scored |
+| `model_predictions` | 849,999 | Everyone's risk score and tier |
+| `shap_explanations` | 2,549,997 | Everyone's top 3 reasons (3 rows each) |
+
+Risk tiers: **high** = score 0.70 or above, **medium** = 0.30 to 0.70, **low** = below 0.30.
 
 ---
 
-## The data
+## What we found in the data (important for the report)
 
-850,000 employees, 31 fields, delivered as a 1.3 GB JSON array (one object per line) rather
-than the CSV the spec anticipated. `load_raw.py` streams it, so it never needs more than a
-few hundred MB of RAM.
+### Problems we found in the raw data
 
-**What the EDA found** — all four of these are documented with evidence in
-`notebooks/01_eda.ipynb`:
+All four are documented with evidence in `notebooks/01_eda.ipynb`.
 
-1. **No NULLs anywhere** — but `role` is whitespace-only in 109,047 rows and holds the
-   literal string `'nan'` in 7,481 more. Those pass every `IS NULL` check while being just as
-   useless. They are folded into an explicit `Unknown` category rather than deleted, which
-   keeps 13% of the dataset that a delete-the-nulls approach would have thrown away.
-2. **Five columns are really three.** `collaboration_score`, `slack_activity` and
-   `meeting_participation` are byte-identical across all 849,999 rows, as are
-   `performance_score` and `goal_achievement_rate`. The copies are dropped.
-3. **No ready-made label.** The dataset has a continuous `burnout_risk` (0–1), not a class.
-   `risk_factors_summary` turns out to be exactly `burnout_risk` cut at **0.75**, so we adopt
-   the dataset's own definition: `is_high_burnout_risk = burnout_risk >= 0.75`.
-4. **Eight columns leak the answer** and are excluded from the feature set — most sharply
-   `stress_level`, which correlates 0.994 with the target and is *exactly equal* to it in 46%
-   of rows. The full list with reasons is at the top of `ml/features.py`.
+**1. No empty cells — but plenty of useless ones.** Nothing in the file is technically
+"missing", so the usual checks all pass. But `role` is just a blank space in 109,047 rows, and
+in another 7,481 it literally contains the text `nan` (`department` too, in 983 rows). Those
+sail through every "is this empty?" test while being exactly as useless as an empty cell. We
+turn them all into a category called `Unknown` rather than deleting those rows — deleting would
+have thrown away 13% of the dataset.
 
----
+**2. Five columns were really three.** `collaboration_score`, `slack_activity` and
+`meeting_participation` contain *identical* numbers in all 849,999 rows. Same for
+`performance_score` and `goal_achievement_rate`. They are not similar-but-different signals —
+they are the same column copied. We keep one of each and drop the copies.
 
-## Honest reading of the results
+**3. There was no yes/no answer to predict.** The file has `burnout_risk`, a number between 0
+and 1 — not a "burned out: yes/no" label, which is what a classifier needs. We discovered that
+the file's own `risk_factors_summary` column is exactly `burnout_risk` split at **0.75**, so we
+use the dataset's own cut-off rather than inventing one: **high risk = burnout_risk ≥ 0.75**.
+
+**4. Eight columns gave away the answer.** This is the big one, and it is called *leakage*.
+`stress_level`, for example, matches `burnout_risk` almost perfectly (and is *exactly equal* in
+46% of rows). A model given that column would look brilliant while having learned nothing — it
+would just be reading the answer off the page. All eight are excluded, with the reason for each
+listed at the top of `ml/features.py`.
+
+> **Leakage in one sentence:** giving the model a column that secretly contains the answer.
+> It is the most common way a machine-learning project produces amazing results that fall apart
+> the moment it meets real data. Finding it is a real result worth writing up.
+
+### Why our 99.99% accuracy is bad news, not good news
+
+**Read this before putting any number from this project into a slide.**
 
 The pipeline meets every item on the acceptance checklist. Two of those numbers should not
 be presented to anyone without the context below.
@@ -261,48 +567,32 @@ implying every listed factor is bad news.
 
 ---
 
-## Database tables
-
-| Table | Rows | Contents |
-|---|---|---|
-| `raw_employee_data` | 849,999 | The source file, untouched, plus a surrogate `employee_id` |
-| `stg_employee_clean` | 849,999 | Cleaned and typed; 0 NULLs, enforced by `NOT NULL`/`CHECK` |
-| `model_metadata` | 4 | One row per model: recall, precision, F1, ROC-AUC, `is_winner`, `is_fallback` |
-| `model_predictions` | 849,999 | Per employee: calibrated `risk_score` and `risk_level` |
-| `shap_explanations` | 2,549,997 | Per employee: top-3 features, signed SHAP value, rank 1–3 |
-
-Re-running the pipeline retires the previous model version, and its predictions and
-explanations cascade away with it — so the database does not grow by 3.4M rows every run.
-
-The source file's own `employee_id` (`SYN_00000123`) is kept only as `source_employee_id` for
-traceability. It is never a primary key, never a feature, and never shown in the dashboard.
-
-Risk tiers are cut on the calibrated probability: **high ≥ 0.70**, **medium ≥ 0.30**, **low**
-below that.
-
----
 
 ## Notes for the team
 
-- `.env` is gitignored; `.env.example` is committed. Never commit the first one.
-- Every path in the code goes through `pathlib`, so scripts work the same on Windows and
-  macOS. If you add file handling, use `Path` and pass `encoding="utf-8"` explicitly —
-  Windows defaults to cp1252 and will mangle any non-ASCII text without it.
-- The dataset is gitignored too — 1.3 GB does not belong in git.
-- **Read `notebooks/01_eda.ipynb` before changing `clean.py` or `features.py`.** Section 10
-  lists every decision those two files implement and why.
-- `LEAKAGE_COLUMNS` at the top of `ml/features.py` is not a style preference. Putting any of
-  those columns back gives you a meaningless model.
-- If you add a feature, add a plain-language label for it in `FEATURE_LABELS` in
-  `dashboard/app.py`, or the dashboard will show the raw column name to a manager.
+- **Never commit `.env`** — it has the database password in it. It is already in `.gitignore`,
+  so this happens automatically, but do not go around it.
+- **Never commit the dataset.** 1.3 GB does not belong in git. Also already handled.
+- **Read `notebooks/01_eda.ipynb` before changing `etl/clean.py` or `ml/features.py`.**
+  Section 10 of the notebook lists every decision those two files implement, and why.
+- **Do not add anything from `LEAKAGE_COLUMNS`** (top of `ml/features.py`) back into the model.
+  It will make the scores look better and the model meaningless.
+- **If you add a new feature**, add a plain-English name for it in `FEATURE_LABELS` in
+  `dashboard/app.py`, or the dashboard will show a manager a raw column name like
+  `n_technical_skills`.
+- **If you write code that reads or writes a file**, use `pathlib.Path` and pass
+  `encoding="utf-8"`. Windows defaults to a different text encoding and will corrupt anything
+  non-English without it.
 
-## Things we did not do
+## Things we deliberately did not do
 
-- **No hyperparameter tuning.** The three models use sensible fixed settings. On a target
-  this separable, tuning would move nothing that matters.
-- **No text modelling.** `recent_feedback` is scraped review prose with no per-employee
-  meaning; it is reduced to its length and dropped. Real feedback text would be worth an NLP
-  pass.
-- **No fairness audit.** The model uses `department`, `role` and `job_level`, and salary is a
-  feature. Before this went anywhere near a real HR decision it would need a bias review
-  across protected groups — none of which are in this dataset.
+Worth mentioning in the report as future work:
+
+- **No hyperparameter tuning.** The models use sensible fixed settings. Given how predictable
+  this dataset's target is, tuning would not change anything meaningful.
+- **No text analysis.** The `recent_feedback` column is scraped review text with no real
+  connection to the individual employee, so we reduced it to its length. Genuine feedback text
+  would be worth a proper NLP pass.
+- **No fairness check.** The model uses `department`, `role`, `job_level`, and salary is an
+  input. Before anything like this touched a real HR decision it would need a bias review
+  across protected groups — and this dataset does not contain the information needed to do one.
