@@ -14,38 +14,108 @@ python etl/run_pipeline.py
 
 ## Quick start
 
-You need **Docker Desktop** (running) and **Python 3.11+**. Four commands from a fresh clone:
+You need **Docker Desktop** (running) and **Python 3.11 or 3.12**.
+
+> **Use 3.11 or 3.12, not 3.13.** `shap` 0.46 ships no pre-built wheel for 3.13, so pip would
+> try to compile it from source and fail unless you have a full C++ toolchain installed. Every
+> other dependency is fine on 3.13 — shap is the one that pins us.
+
+Pick your platform below; everything after setup is identical.
+
+<details open>
+<summary><b>Windows</b> (PowerShell)</summary>
+
+Install the two prerequisites first if you do not have them:
+
+- [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/) — needs the
+  **WSL 2** backend, which its installer offers to set up for you. Launch it and wait for the
+  whale icon to stop animating before running anything below.
+- [Python 3.11 or 3.12](https://www.python.org/downloads/windows/) — **tick "Add python.exe to
+  PATH"** in the installer, or nothing below will be found. Do not use 3.13 (see the note
+  above).
+
+Then, from the repo folder:
+
+```powershell
+docker compose up -d --wait
+py -3.11 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Put the dataset at `data\raw\synthetic-employee-dataset.json`, then:
+
+```powershell
+.venv\Scripts\python etl\run_pipeline.py
+.venv\Scripts\streamlit run dashboard\app.py
+```
+
+Two things that trip people up on Windows:
+
+- **`py -3.11` not `python3.11`.** The `py` launcher is what the Python installer puts on PATH.
+  If `py -3.11` reports no such version, run `py -0` to list what you actually have.
+  `py -3.12` works equally well; `py -3.13` does not (see the note above).
+- **`.venv\Scripts\` not `.venv/bin/`.** This is the one difference that shows up in every
+  command. If you would rather not type it each time, activate the environment once per
+  terminal and drop the prefix entirely:
+
+  ```powershell
+  .venv\Scripts\Activate.ps1
+  python etl\run_pipeline.py
+  ```
+
+  If PowerShell refuses with an execution-policy error, this allows local scripts for your
+  user only:
+
+  ```powershell
+  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+  ```
+
+</details>
+
+<details open>
+<summary><b>macOS / Linux</b></summary>
 
 ```bash
 docker compose up -d --wait
-```
-
-```bash
-python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
-```
-
-```bash
+python3.11 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Put the dataset at `data/raw/synthetic-employee-dataset.json` (or point `RAW_DATA_PATH` in
-`.env` somewhere else), then:
+Put the dataset at `data/raw/synthetic-employee-dataset.json`, then:
 
 ```bash
 .venv/bin/python etl/run_pipeline.py
-```
-
-That takes about **six minutes** end to end. When it finishes:
-
-```bash
 .venv/bin/streamlit run dashboard/app.py
 ```
 
-To check everything landed correctly:
+</details>
+
+The pipeline takes about **six minutes** end to end. The dashboard then opens at
+<http://localhost:8501>.
+
+To check everything landed correctly (`.venv\Scripts\pytest` on Windows):
 
 ```bash
 .venv/bin/pytest tests/ -v
 ```
+
+### If something goes wrong
+
+| Symptom | Cause and fix |
+|---|---|
+| `no such file or directory: .venv/bin/...` | You are not in the repo folder, or you are on Windows and need `.venv\Scripts\`. |
+| `connection refused` / `could not connect to server` | Postgres is not up. Run `docker compose up -d --wait` and wait for it to report healthy. |
+| `docker: unknown command: docker compose` | Docker Desktop is installed but not running. Start it and wait for the whale icon to settle. |
+| Dashboard loads but says "No trained model found" | The pipeline has not been run yet. Run `etl/run_pipeline.py`. |
+| `port 5432 already in use` | You have another Postgres running. Change `POSTGRES_PORT` in `.env` to e.g. `5433` and re-run `docker compose up -d --wait`. |
+| Pipeline fails at the `load` stage | The dataset is not where `RAW_DATA_PATH` in `.env` points. That path is relative to the repo root. |
+| `pip install` fails building `shap`, or asks for "Microsoft Visual C++ 14.0" | You are on Python 3.13. Delete `.venv`, recreate it with `py -3.12 -m venv .venv`, and install again. |
+| `'.venv\Scripts\Activate.ps1' cannot be loaded because running scripts is disabled` | PowerShell execution policy — see the `Set-ExecutionPolicy` command above. |
+
+Stopping things: `Ctrl-C` stops the dashboard, `docker compose down` stops the database and
+keeps the data, `docker compose down -v` throws the data away too.
 
 ---
 
@@ -74,6 +144,8 @@ Handy flags while developing:
 ```bash
 .venv/bin/python etl/run_pipeline.py --skip-load --skip-train
 ```
+
+(On Windows: `.venv\Scripts\python etl\run_pipeline.py --skip-load --skip-train`.)
 
 ---
 
@@ -213,6 +285,9 @@ below that.
 ## Notes for the team
 
 - `.env` is gitignored; `.env.example` is committed. Never commit the first one.
+- Every path in the code goes through `pathlib`, so scripts work the same on Windows and
+  macOS. If you add file handling, use `Path` and pass `encoding="utf-8"` explicitly —
+  Windows defaults to cp1252 and will mangle any non-ASCII text without it.
 - The dataset is gitignored too — 1.3 GB does not belong in git.
 - **Read `notebooks/01_eda.ipynb` before changing `clean.py` or `features.py`.** Section 10
   lists every decision those two files implement and why.

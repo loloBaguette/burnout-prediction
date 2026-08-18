@@ -177,7 +177,7 @@ def build_features(
 
     if save_spec:
         FEATURE_SPEC_PATH.parent.mkdir(parents=True, exist_ok=True)
-        FEATURE_SPEC_PATH.write_text(json.dumps(spec, indent=2))
+        FEATURE_SPEC_PATH.write_text(json.dumps(spec, indent=2), encoding="utf-8")
 
     return X, y, spec
 

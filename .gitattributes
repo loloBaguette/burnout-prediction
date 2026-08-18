@@ -1,0 +1,9 @@
+# Normalise line endings so the repo behaves the same on Windows and macOS.
+# Without this, git checks files out with CRLF on Windows, which the Postgres
+# init script and the .env parser both read more happily as LF.
+* text=auto eol=lf
+
+# Binary artifacts: never touch these.
+*.joblib binary
+*.ipynb  text eol=lf
+*.json   text eol=lf

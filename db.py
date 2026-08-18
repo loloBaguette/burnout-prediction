@@ -40,7 +40,7 @@ def get_engine():
 
 def apply_schema() -> None:
     """Run db/schema.sql. Safe to call repeatedly (everything is IF NOT EXISTS)."""
-    schema_sql = (REPO_ROOT / "db" / "schema.sql").read_text()
+    schema_sql = (REPO_ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text(schema_sql))
